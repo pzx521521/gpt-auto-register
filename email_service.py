@@ -3,8 +3,9 @@
 基于 cloudflare_temp_email 项目实现临时邮箱功能
 项目地址: https://github.com/dreamhunter2333/cloudflare_temp_email
 """
-
+import json
 import random
+import re
 import string
 import time
 import email
@@ -20,7 +21,9 @@ from config import (
 )
 from utils import http_session, get_user_agent, extract_verification_code
 
-
+def create_my_email(index: int):
+    fallback_email = f"chatgpt{index}@{EMAIL_DOMAIN}"
+    return fallback_email, None
 def create_temp_email():
     """
     创建临时邮箱
@@ -98,7 +101,7 @@ def fetch_emails(jwt_token: str):
     try:
         # API 需要 limit 和 offset 参数
         response = http_session.get(
-            f"{EMAIL_WORKER_URL}/api/mails?limit=20&offset=0",
+            f"{EMAIL_WORKER_URL}/all",
             headers=headers,
             timeout=HTTP_TIMEOUT
         )
@@ -110,7 +113,7 @@ def fetch_emails(jwt_token: str):
             if isinstance(result, list):
                 return result
             elif isinstance(result, dict):
-                return result.get('results', result.get('mails', []))
+                return result.get('result')
         else:
             print(f"  获取邮件错误: HTTP {response.status_code}")
             
@@ -277,5 +280,55 @@ def wait_for_verification_email(jwt_token: str, timeout: int = None):
         print(f"  等待中... ({elapsed}秒)", end='\r')
         time.sleep(EMAIL_POLL_INTERVAL)
     
+    print("\n⏰ 等待验证邮件超时")
+    return None
+
+
+def my_wait_for_verification_email(email_addr: str, timeout: int = None):
+    """
+    等待并提取 OpenAI 验证码
+    会持续轮询邮箱直到收到验证邮件或超时
+
+    参数:
+        jwt_token: JWT 令牌
+        timeout: 超时时间（秒），默认使用配置文件中的值
+
+    返回:
+        str: 验证码，未找到返回 None
+    """
+    if timeout is None:
+        timeout = EMAIL_WAIT_TIMEOUT
+
+    print(f"⏳ 正在等待验证邮件（最长 {timeout} 秒）...")
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        emails = fetch_emails(email_addr)
+
+        if emails and len(emails) > 0:
+            #[{'key': 'app_logs', 'value': None}, {'key': 'pzx521521@qq.com|admin@para.de5.net', 'value': '{"subject":"转发：你的 ChatGPT 代码为 245344","content":"原始邮件\\r\\n         \\r\\n       \\r\\n发件人：OpenAI <otp@tm1.openai.com&gt;\\r\...n\\r\\n\\r\\n谨致问候\\r\\nChatGPT 团队 \\r\\n\\r\\n\\r\\n \\r\\n\\r\\n\\r\\nChatGPT                              \\r\\n\\r\\n帮助中心"}'}]
+            for email_item in emails:
+                key = email_item.get("key", "")
+                value = email_item.get("value")
+                if  email_addr in key:
+                    try:
+                        parsed = json.loads(value)
+                    except json.JSONDecodeError:
+                        continue
+
+                    subject = parsed.get("subject", "")
+                    sender = parsed.get("sender", "").lower()
+                    body = parsed.get("content", "")
+
+                    # 从 subject 中读取验证码（连续数字）
+                    match = re.search(r"\d{4,8}", subject)
+                    if match:
+                        code = match.group()
+                        return code
+        # 显示等待进度
+        elapsed = int(time.time() - start_time)
+        print(f"  等待中... ({elapsed}秒)", end='\r')
+        time.sleep(EMAIL_POLL_INTERVAL)
+
     print("\n⏰ 等待验证邮件超时")
     return None

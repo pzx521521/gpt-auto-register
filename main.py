@@ -22,10 +22,11 @@ import random
 from config import (
     TOTAL_ACCOUNTS,
     BATCH_INTERVAL_MIN,
-    BATCH_INTERVAL_MAX
+    BATCH_INTERVAL_MAX, save_email_prefix_length, EMAIL_PREFIX_LENGTH
 )
 from utils import generate_random_password, save_to_txt, update_account_status
-from email_service import create_temp_email, wait_for_verification_email
+from email_service import create_temp_email, wait_for_verification_email, create_my_email, \
+    my_wait_for_verification_email
 from browser import (
     create_driver,
     fill_signup_form,
@@ -36,7 +37,7 @@ from browser import (
 )
 
 
-def register_one_account(monitor_callback=None):
+def register_one_account(index: int, driver=None, monitor_callback=None):
     """
     注册单个账号
     :param monitor_callback: 回调函数 func(driver, step_name)，用于截图和中断检查
@@ -44,7 +45,6 @@ def register_one_account(monitor_callback=None):
     返回:
         tuple: (邮箱, 密码, 是否成功)
     """
-    driver = None
     email = None
     password = None
     success = False
@@ -57,16 +57,20 @@ def register_one_account(monitor_callback=None):
     try:
         # 1. 创建临时邮箱
         print("📧 正在创建临时邮箱...")
-        email, jwt_token = create_temp_email()
+        email, jwt_token = create_my_email(index)
         if not email:
             print("❌ 创建邮箱失败，终止注册")
             return None, None, False
         
         # 2. 生成随机密码
-        password = generate_random_password()
-        
+        # password = generate_random_password()
+        password = "52113147758pzx"
         # 3. 初始化浏览器
-        driver = create_driver(headless=False)
+        if driver == None:    # 清除当前域名下的所有 cookie
+            driver = create_driver(headless=False)
+        else:
+            print("🧹cookie ...")
+            driver.delete_all_cookies()
         _report("init_browser")
         
         # 4. 打开注册页面
@@ -83,8 +87,8 @@ def register_one_account(monitor_callback=None):
         _report("fill_form")
         
         # 6. 等待验证邮件
-        time.sleep(5)
-        verification_code = wait_for_verification_email(jwt_token)
+        time.sleep(2)
+        verification_code = my_wait_for_verification_email(email)
         
         # 如果没有自动获取到验证码，提示手动输入
         if not verification_code:
@@ -109,8 +113,10 @@ def register_one_account(monitor_callback=None):
         _report("fill_profile")
         
         # 9. 保存账号信息 (注册成功)
+        print("🎉 保存账号信息")
         save_to_txt(email, password, "已注册")
-        
+        print(f"🎉 更新配置文件:{index}")
+        save_email_prefix_length(index)
         # 10. 完成注册
         print("\n" + "=" * 50)
         print("🎉 注册成功！")
@@ -120,40 +126,8 @@ def register_one_account(monitor_callback=None):
         
         success = True
         print("⏳ 等待页面稳定...")
-        time.sleep(5)
+        time.sleep(3)
         _report("registered")
-        
-        # 11. 开通 Plus 试用
-        print("\n" + "-" * 30)
-        print("🚀 开始开通 Plus 试用")
-        print("-" * 30)
-        
-        if subscribe_plus_trial(driver):
-            print("🎉 Plus 试用开通成功！")
-            update_account_status(email, "已开通Plus")
-            _report("plus_subscribed")
-            
-            # 12. 取消订阅 (防止扣费)
-            print("\n" + "-" * 30)
-            print("🛑 正在取消订阅...")
-            print("-" * 30)
-            
-            time.sleep(5)
-            if cancel_subscription(driver):
-                print("🎉 订阅已成功取消，流程完美结束！")
-                update_account_status(email, "已取消订阅")
-                _report("subscription_cancelled")
-            else:
-                print("⚠️ 订阅取消失败，请务必手动取消！")
-                update_account_status(email, "取消订阅失败")
-                _report("cancel_failed")
-        else:
-            print("⚠️ Plus 试用开通失败")
-            update_account_status(email, "Plus开通失败")
-            _report("plus_failed")
-            
-        success = True
-        time.sleep(5)
         
     except InterruptedError:
         print("🛑 任务已被用户强制中断")
@@ -166,10 +140,10 @@ def register_one_account(monitor_callback=None):
         if email and password:
             update_account_status(email, f"错误: {str(e)[:50]}")
     
-    finally:
-        if driver:
-            print("🔒 正在关闭浏览器...")
-            driver.quit()
+    # finally:
+        # if driver:
+        #     print("🔒 正在关闭浏览器...")
+        #     driver.quit()
     
     return email, password, success
     
@@ -191,13 +165,13 @@ def run_batch():
     success_count = 0
     fail_count = 0
     registered_accounts = []
-    
+    driver = create_driver(headless=False)
     for i in range(TOTAL_ACCOUNTS):
         print("\n" + "#" * 60)
         print(f"📝 正在注册第 {i + 1}/{TOTAL_ACCOUNTS} 个账号")
         print("#" * 60 + "\n")
         
-        email, password, success = register_one_account()
+        email, password, success = register_one_account(i+EMAIL_PREFIX_LENGTH, driver)
         
         if success:
             success_count += 1
@@ -235,4 +209,6 @@ def run_batch():
 
 
 if __name__ == "__main__":
+    import os, certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
     run_batch()

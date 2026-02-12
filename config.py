@@ -294,6 +294,31 @@ class ConfigLoader:
         
         return value
 
+def save_email_prefix_length(prefix_length: int) -> None:
+    """
+    修改 email.prefix_length 并立即保存到 config.yaml
+    """
+    if not _loader.config_path:
+        raise RuntimeError("未加载配置文件，无法保存")
+
+    # 确保 email 节点存在
+    if "email" not in _loader.raw_config:
+        _loader.raw_config["email"] = {}
+
+    # 修改值
+    _loader.raw_config["email"]["prefix_length"] = prefix_length
+
+    # 写回文件
+    with open(_loader.config_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(
+            _loader.raw_config,
+            f,
+            allow_unicode=True,
+            sort_keys=False
+        )
+
+    # 重新加载一次，让 cfg 同步
+    _loader.reload()
 
 # ==============================================================
 # 全局配置实例

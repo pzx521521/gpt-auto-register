@@ -1,0 +1,10 @@
+faker
+flask
+pandas
+pyyaml
+requests
+selenium
+streamlit
+undetected-chromedriver
+waitress
+watchdog
