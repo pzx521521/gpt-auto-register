@@ -22,66 +22,8 @@ from config import (
 from utils import http_session, get_user_agent, extract_verification_code
 
 def create_my_email(index: int):
-    fallback_email = f"chatgpt{index}@{EMAIL_DOMAIN}"
+    fallback_email = f"cx_{index}@{EMAIL_DOMAIN}"
     return fallback_email, None
-def create_temp_email():
-    """
-    创建临时邮箱
-    调用 cloudflare_temp_email 的 /api/new_address 接口
-    
-    注意: 服务器会自动给邮箱名称添加 'tmp' 前缀，
-    因此应该使用服务器返回的 address 字段作为实际邮箱地址
-    
-    返回:
-        tuple: (邮箱地址, JWT令牌)，失败返回 (None, None)
-    """
-    print("📧 正在创建临时邮箱...")
-    
-    # 生成随机邮箱前缀（服务器会自动添加 tmp 前缀）
-    prefix = ''.join(random.choices(
-        string.ascii_lowercase + string.digits, 
-        k=EMAIL_PREFIX_LENGTH
-    ))
-    
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": get_user_agent()
-    }
-    
-    try:
-        # 调用创建邮箱接口
-        response = http_session.post(
-            f"{EMAIL_WORKER_URL}/api/new_address",
-            headers=headers,
-            json={"name": prefix},
-            timeout=HTTP_TIMEOUT
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            jwt_token = result.get('jwt')
-            # 使用服务器返回的实际邮箱地址（包含 tmp 前缀）
-            actual_email = result.get('address')
-            
-            if jwt_token and actual_email:
-                print(f"✅ 邮箱创建成功: {actual_email}")
-                return actual_email, jwt_token
-            elif jwt_token:
-                # 兼容：如果服务器没有返回 address，则自己拼接
-                fallback_email = f"tmp{prefix}@{EMAIL_DOMAIN}"
-                print(f"✅ 邮箱创建成功: {fallback_email}")
-                return fallback_email, jwt_token
-            else:
-                print(f"⚠️ 响应中未包含 JWT: {result}")
-        else:
-            print(f"❌ API 错误: HTTP {response.status_code}")
-            print(f"   响应内容: {response.text[:200]}")
-            
-    except Exception as e:
-        print(f"❌ 创建邮箱失败: {e}")
-    
-    return None, None
-
 
 def fetch_emails(jwt_token: str):
     """

@@ -2,7 +2,7 @@
 浏览器自动化模块
 使用 undetected-chromedriver 实现 ChatGPT 注册流程
 """
-
+import random
 import time
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -73,7 +73,7 @@ def create_driver(headless=False):
         options.add_argument("--lang=zh-CN,zh;q=0.9,en;q=0.8")
     
     # 使用自定义的 SafeChrome (注意: 传入 real_headless=False)
-    driver = SafeChrome(options=options, version_main=143,use_subprocess=True, headless=real_headless)
+    driver = SafeChrome(options=options,use_subprocess=True, headless=real_headless)
     
     # === 深度伪装 (针对 Headless 模式) ===
     if headless:
@@ -216,7 +216,7 @@ def type_slowly(element, text, delay=0.05):
     """
     for char in text:
         element.send_keys(char)
-        time.sleep(delay)
+        time.sleep(random.uniform(delay, delay+.05))
 
 
 def fill_signup_form(driver, email: str, password: str):
@@ -262,7 +262,7 @@ def fill_signup_form(driver, email: str, password: str):
                          if checkbox:
                              print("  🖱️ 尝试点击验证框...")
                              driver.execute_script("arguments[0].click();", checkbox[0])
-                             time.sleep(5)
+                             time.sleep(random.uniform(2,6))
                          driver.switch_to.default_content()
                      except:
                          driver.switch_to.default_content()
@@ -286,7 +286,7 @@ def fill_signup_form(driver, email: str, password: str):
             if target_btn and target_btn.is_displayed():
                 driver.execute_script("arguments[0].click();", target_btn)
                 print("  ✅ 已点击入口按钮")
-                time.sleep(3)
+                time.sleep(random.uniform(2,4))
         except Exception as e:
             print(f"  ⚠️ 检查入口按钮时出错 (非致命): {e}")
 
@@ -306,7 +306,7 @@ def fill_signup_form(driver, email: str, password: str):
         actions.send_keys(email)
         actions.perform()
         
-        time.sleep(1)
+        time.sleep(random.uniform(1,1.5))
         
         # 验证输入是否成功
         actual_value = email_input.get_attribute('value')
@@ -315,7 +315,7 @@ def fill_signup_form(driver, email: str, password: str):
         else:
             print(f"⚠️ 输入可能不完整，实际值: {actual_value}")
         
-        time.sleep(1)
+        time.sleep(random.uniform(1,1.5))
         
         # 2. 点击继续按钮
         print("🔘 点击继续按钮...")
@@ -327,7 +327,7 @@ def fill_signup_form(driver, email: str, password: str):
         actions.click()
         actions.perform()
         print("✅ 已点击继续")
-        time.sleep(3)
+        time.sleep(random.uniform(1,3))
 
         inputPassword(driver, email, password)
         return True
@@ -343,10 +343,10 @@ def inputPassword(driver, email: str, password: str):
         EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[autocomplete="new-password"]'))
     )
     password_input.clear()
-    time.sleep(0.5)
+    time.sleep(random.uniform(.2,.6))
     type_slowly(password_input, password)
     print("✅ 已输入密码")
-    time.sleep(.5)
+    time.sleep(random.uniform(.2,.6))
 
     # 5. 点击继续
     print("🔘 点击继续按钮...")
@@ -354,7 +354,7 @@ def inputPassword(driver, email: str, password: str):
         print("❌ 点击继续按钮失败")
         return False
     print("✅ 已点击继续")
-    time.sleep(.8)
+    random.uniform(.6,1.2)
     if check_and_handle_error(driver):
         inputPassword(driver, email, password)
 
@@ -367,7 +367,7 @@ def login(driver, email, password):
     
     try:
         driver.get("https://chat.openai.com/auth/login")
-        time.sleep(5)
+        random.uniform(3,6)
         
         # 0. 点击初始页面的 Log in / 登录 按钮
         print("🔘 寻找 Log in / 登录 按钮...")
@@ -406,7 +406,7 @@ def login(driver, email, password):
         except Exception as e:
             print(f"⚠️ 点击登录按钮出错: {e}")
             
-        time.sleep(3)
+        random.uniform(2,4)
         
         # 1. 输入邮箱
         print("📧 输入邮箱...")
@@ -422,7 +422,7 @@ def login(driver, email, password):
         print("🔘 点击继续...")
         continue_btn = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"], button[class*="continue-btn"]')
         continue_btn.click()
-        time.sleep(3)
+        random.uniform(2,4)
         
         # ⚠️ 关键修正：检查是否进入了验证码模式，如果是，切换回密码模式
         print("🔍 检查登录方式...")
@@ -451,13 +451,13 @@ def login(driver, email, password):
                     try:
                         el.click()
                         clicked_switch = True
-                        time.sleep(2)
+                        time.sleep(random.uniform(1,3))
                         break
                     except:
                         # 可能是被遮挡，尝试 JS 点击
                         driver.execute_script("arguments[0].click();", el)
                         clicked_switch = True
-                        time.sleep(2)
+                        time.sleep(random.uniform(1,3))
                         break
             
             if not clicked_switch:
@@ -509,84 +509,85 @@ def login(driver, email, password):
         return False
 
 
-def enter_verification_code(driver, code: str):
+def wait_for_verification_input(driver, timeout=10):
     """
-    通用验证码输入函数（支持两种情况）
-      - 单个 input 输入全部验证码
-      - 多个单格 input 逐格输入验证码
+    同时等待单输入框或多格输入框出现
+    返回：
+        ("single", WebElement) 或 ("multi", list[WebElement]) 或 (None, None)
     """
 
+    def check_inputs(driver):
+        # 单框：匹配属性或 label
+        single_inputs = driver.find_elements(By.CSS_SELECTOR,
+         'input[name="code"], input[placeholder*="代码"], input[aria-label*="代码"]')
+        single_inputs = [inp for inp in single_inputs if inp.get_attribute('type') != 'hidden']
+        if single_inputs:
+            return "single", single_inputs[0]
+
+        # 多框：role="group" 下的数字 input
+        multi_inputs = driver.find_elements(By.CSS_SELECTOR,
+        'div[role="group"] input[inputmode="numeric"][maxlength="1"]')
+        if multi_inputs:
+            return "multi", multi_inputs
+
+        return False
+
+    try:
+        result = WebDriverWait(driver, timeout).until(check_inputs)
+        return result
+    except:
+        return None, None
+
+
+def enter_verification_code(driver, code: str):
+    """
+    高效验证码输入函数
+      - 自动判断单个或多格输入
+      - 支持递归重试
+    """
     try:
         print("🔢 准备输入验证码...")
 
         # 先检查是否有错误页面并处理
-        while check_and_handle_error(driver):
-            time.sleep(1)
+        # while check_and_handle_error(driver):
+        #     time.sleep(1)
 
-        # ---- 情况 1: 单个输入框 ----
-        try:
-            single_input = WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located((
-                    By.CSS_SELECTOR,
-                    'input[name="code"], input[placeholder*="代码"], input[aria-label*="代码"]'
-                ))
-            )
+        # 等待验证码输入框
+        v_type, elements = wait_for_verification_input(driver, timeout=10)
+        if v_type is None:
+            print("❌ 未检测到验证码输入框")
+            return False
+
+        if v_type == "single":
             print("➡️ 检测到单个验证码输入框...")
-            single_input.clear()
-            time.sleep(0.2)
-            type_slowly(single_input, code, delay=0.1)
+            elements.clear()
+            time.sleep(random.uniform(.1, .2))
+            type_slowly(elements, code, delay=0.1)
             print(f"✅ 已输入验证码: {code}")
 
-            # 点击继续
-            print("🔘 点击继续按钮...")
-            if not click_button_with_retry(driver, 'button[type="submit"]'):
-                print("❌ 点击继续按钮失败")
-                return False
-            print("✅ 已点击继续按钮")
-            time.sleep(2)
-            if check_and_handle_error(driver):
-                enter_verification_code(driver, code)
-            return True
-
-        except Exception:
-            # 没有找到单个输入框，则尝试多格输入
-            print("⚪ 未检测到单个输入框，尝试多格验证码输入...")
-
-        # ---- 情况 2: 多个分格输入 ----
-        try:
-            inputs = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((
-                    By.CSS_SELECTOR,
-                    'div._inputs_jvuix_68 input'
-                ))
-            )
-
-            print(f"➡️ 检测到 {len(inputs)} 个验证码格... 逐格输入")
-            if len(code) != len(inputs):
+        elif v_type == "multi":
+            print(f"➡️ 检测到 {len(elements)} 个验证码格... 逐格输入")
+            if len(code) != len(elements):
                 print("⚠️ 验证码长度与输入格数量不一致")
-
-            for i, digit in enumerate(code[:len(inputs)]):
-                el = inputs[i]
+            for i, digit in enumerate(code[:len(elements)]):
+                el = elements[i]
                 el.click()
-                time.sleep(0.1)
+                time.sleep(random.uniform(.1,.2))
                 el.send_keys(digit)
-                time.sleep(0.15)
-
+                time.sleep(random.uniform(.1,.2))
             print(f"✅ 多格验证码已输入: {code}")
 
-            # 点击继续
-            print("🔘 点击继续按钮...")
-            if not click_button_with_retry(driver, 'button[type="submit"]'):
-                print("❌ 点击继续按钮失败")
-                return False
-            print("✅ 已点击继续按钮")
-            time.sleep(2)
-            if check_and_handle_error(driver):
-                enter_verification_code(driver, code)
-            return True
+        # 点击继续按钮
+        print("🔘 点击继续按钮...")
+        if not click_button_with_retry(driver, 'button[type="submit"]'):
+            print("❌ 点击继续按钮失败")
+            return False
+        print("✅ 已点击继续按钮")
+        time.sleep(random.uniform(1,3))
 
-        except Exception:
-            print("❌ 未检测到任何验证码输入框")
+        # 检查是否仍有错误
+        if check_and_handle_error(driver):
+            return enter_verification_code(driver, code)
 
         return True
 
@@ -624,14 +625,14 @@ def fill_profile_info(driver):
             ))
         )
         name_input.clear()
-        time.sleep(0.5)
+        time.sleep(random.uniform(.5,.6))
         type_slowly(name_input, user_name)
         print(f"✅ 已输入姓名: {user_name}")
-        time.sleep(1)
+        time.sleep(random.uniform(.5,1))
         
         # 2. 输入生日
         print("🎂 正在输入生日...")
-        time.sleep(1)
+        time.sleep(random.uniform(.5,1))
         
         # 年份
         year_input = WebDriverWait(driver, 30).until(

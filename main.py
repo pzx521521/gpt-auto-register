@@ -24,8 +24,9 @@ from config import (
     BATCH_INTERVAL_MIN,
     BATCH_INTERVAL_MAX, save_email_prefix_length, EMAIL_PREFIX_LENGTH
 )
+from finger_manager import FingerprintManager
 from utils import generate_random_password, save_to_txt, update_account_status
-from email_service import create_temp_email, wait_for_verification_email, create_my_email, \
+from email_service import wait_for_verification_email, create_my_email, \
     my_wait_for_verification_email
 from browser import (
     create_driver,
@@ -68,9 +69,6 @@ def register_one_account(index: int, driver=None, monitor_callback=None):
         # 3. 初始化浏览器
         if driver == None:    # 清除当前域名下的所有 cookie
             driver = create_driver(headless=False)
-        else:
-            print("🧹cookie ...")
-            driver.delete_all_cookies()
         _report("init_browser")
         
         # 4. 打开注册页面
@@ -126,7 +124,7 @@ def register_one_account(index: int, driver=None, monitor_callback=None):
         
         success = True
         print("⏳ 等待页面稳定...")
-        time.sleep(3)
+        time.sleep(random.uniform(2, 5))
         _report("registered")
         
     except InterruptedError:
@@ -157,20 +155,18 @@ def run_batch():
     print("\n" + "=" * 60)
     print(f"🚀 开始批量注册，目标数量: {TOTAL_ACCOUNTS}")
     print("=" * 60 + "\n")
-
-    print("\n⚠️  免责声明：本项目仅供学习研究使用。请勿用于商业用途或违规操作。")
-    print("⚠️  使用者需自行承担因违规使用导致的一切后果。\n")
-    time.sleep(2)
-    
     success_count = 0
     fail_count = 0
     registered_accounts = []
     driver = create_driver(headless=False)
+    manager = FingerprintManager(driver)
+
     for i in range(TOTAL_ACCOUNTS):
         print("\n" + "#" * 60)
         print(f"📝 正在注册第 {i + 1}/{TOTAL_ACCOUNTS} 个账号")
         print("#" * 60 + "\n")
-        
+        print("🧹清理cookie,更换指纹 ...")
+        manager.update_identity()
         email, password, success = register_one_account(i+EMAIL_PREFIX_LENGTH, driver)
         
         if success:
@@ -178,6 +174,7 @@ def run_batch():
             registered_accounts.append((email, password))
         else:
             fail_count += 1
+            break
         
         # 显示进度
         print("\n" + "-" * 40)
